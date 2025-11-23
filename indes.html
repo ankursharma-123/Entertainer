@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Entertainment Picker</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d1117;
+            color: #c9d1d9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+
+        .card {
+            background-color: #161b22;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            border: 1px solid #30363d;
+        }
+
+        .btn-primary {
+            transition: background-color 0.2s, transform 0.1s;
+        }
+        .btn-primary:hover {
+            background-color: #38a169;
+        }
+        .btn-primary:active {
+            transform: scale(0.98);
+        }
+
+        /* Type Selector Buttons */
+        .type-btn {
+            background-color: #374151; /* gray-700 */
+            color: #d1d5db; /* gray-300 */
+            border: 1px solid #4b5563; /* gray-600 */
+            transition: all 0.2s;
+        }
+        .type-btn:hover {
+            background-color: #4b5563; /* gray-600 */
+        }
+        .type-btn.active {
+            background-color: #059669; /* emerald-600 */
+            color: white;
+            border-color: #10b981; /* emerald-500 */
+            font-weight: bold;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+        }
+
+        /* Custom Select Styling */
+        select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 0.5rem center;
+            background-repeat: no-repeat;
+            background-size: 1.5em 1.5em;
+        }
+
+        /* Loading Spinner */
+        #loading-indicator {
+            border: 4px solid rgba(255, 255, 255, 0.2);
+            border-top: 4px solid #48bb78;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                },
+            },
+        }
+    </script>
+</head>
+<body>
+
+<div class="card w-full max-w-lg p-6 sm:p-8 rounded-xl">
+    <h1 class="text-3xl font-bold mb-6 text-white text-center">🍿 Gemini Entertainment Picker</h1>
+
+    <!-- Content Type Selector -->
+    <div class="mb-6">
+        <label class="block text-xs uppercase tracking-wider font-bold text-gray-500 mb-3">
+            I want to watch...
+        </label>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2" id="type-selector">
+            <button class="type-btn active rounded-lg py-2 text-sm" onclick="selectType('Movies')">Movies</button>
+            <button class="type-btn rounded-lg py-2 text-sm" onclick="selectType('TV Series')">TV Series</button>
+            <button class="type-btn rounded-lg py-2 text-sm" onclick="selectType('Anime')">Anime</button>
+            <button class="type-btn rounded-lg py-2 text-sm" onclick="selectType('Web Shows')">Web Shows</button>
+        </div>
+    </div>
+
+    <!-- Genre Dropdown Form -->
+    <div class="space-y-4 mb-8">
+        <label for="genre-select" class="block text-sm font-medium text-gray-400">
+            Pick a Genre (or leave blank for a surprise)
+        </label>
+        
+        <div class="relative">
+            <select id="genre-select" 
+                    class="w-full px-4 py-3 bg-gray-700 text-white border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none cursor-pointer">
+                <!-- Options populated by JS -->
+            </select>
+        </div>
+
+        <button id="pick-movie-btn"
+                class="btn-primary w-full px-4 py-3 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 disabled:opacity-50 flex items-center justify-center"
+                onclick="processSelection()">
+            Pick 5 Movies for Me!
+        </button>
+        
+        <div class="flex justify-between items-center text-sm">
+             <button id="clear-history-btn"
+                     class="px-3 py-2 bg-gray-700 text-gray-300 font-medium rounded-lg hover:bg-gray-600 transition"
+                     onclick="clearHistory()">
+                 Clear History
+             </button>
+             <span id="history-count" class="text-gray-400">0 titles remembered.</span>
+         </div>
+    </div>
+    
+    <!-- API Key Input (Hidden by default, shown on 401 error) -->
+    <div id="api-key-container" class="hidden mb-6 p-4 bg-gray-800 border border-red-500 rounded-lg">
+        <h3 class="text-red-400 font-bold text-sm mb-2">⚠️ Authentication Required</h3>
+        <p class="text-xs text-gray-400 mb-3">
+            The built-in key failed. To use this app, please paste your own 
+            <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-400 underline">Google Gemini API Key</a> below.
+        </p>
+        <input type="password" id="user-api-key" placeholder="Paste API Key here (starts with AIza...)"
+               class="w-full px-3 py-2 bg-gray-900 text-white border border-gray-600 rounded mb-2 text-sm focus:border-green-500 focus:outline-none">
+        <button onclick="saveKeyAndRetry()" class="w-full py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded">
+            Save Key & Retry
+        </button>
+    </div>
+
+    <!-- Loading & Results -->
+    <div id="loading-container" class="hidden flex justify-center py-4">
+        <div id="loading-indicator"></div>
+    </div>
+
+    <div id="result-container" class="mt-6 p-4 border border-gray-600 rounded-lg hidden">
+        <h2 id="result-title" class="text-xl font-semibold mb-4 text-green-400">Top 5 Recommendations:</h2>
+        <div id="result-list-container" class="space-y-4"></div>
+        <div id="source-list" class="mt-4 pt-4 border-t border-gray-700 text-xs text-gray-500"></div>
+    </div>
+
+    <!-- Message Box -->
+    <div id="message-box" class="hidden mt-4 p-3 bg-red-800 text-red-200 rounded-lg text-sm" role="alert"></div>
+</div>
+
+<script type="module">
+    // --- Configuration ---
+    const defaultApiKey = ""; // Environment key
+    const model = 'gemini-2.5-flash-preview-09-2025';
+    
+    // --- Data: Genres ---
+    const genresByType = {
+        'Movies': [
+            "Sci-Fi", "Action", "Comedy", "Thriller", "Horror", "Drama", "Romance", 
+            "Adventure", "Mystery", "Fantasy", "Animation", "Crime", "Documentary", 
+            "War", "Western", "Musical", "Biographical", "Sports", "Cyberpunk", "Noir"
+        ],
+        'TV Series': [
+            "Drama", "Sitcom", "Thriller", "Sci-Fi", "Crime", "Fantasy", "Reality TV", 
+            "Miniseries", "Documentary", "Action", "Mystery", "Historical Drama", 
+            "Teen Drama", "Medical Drama", "Political Drama", "Dark Comedy"
+        ],
+        'Anime': [
+            "Shonen (Action/Adventure)", "Seinen (Adult/Serious)", "Shojo (Romance/Drama)", 
+            "Isekai (Another World)", "Mecha (Robots)", "Slice of Life", "Sports", 
+            "Psychological Thriller", "Dark Fantasy", "Cyberpunk", "RomCom", "Horror"
+        ],
+        'Web Shows': [
+            "Sketch Comedy", "Vlogs/Lifestyle", "Web Series Drama", "Tech/Review", 
+            "Educational", "Gaming", "True Crime", "Podcast (Video)", "Cooking", 
+            "Travel", "Stand-up Specials", "Reality Competition"
+        ]
+    };
+
+    // --- State ---
+    let selectionHistory = [];
+    let currentType = 'Movies'; // Default type
+
+    // --- DOM Elements ---
+    const genreSelect = document.getElementById('genre-select');
+    const pickBtn = document.getElementById('pick-movie-btn');
+    const loadingContainer = document.getElementById('loading-container');
+    const resultContainer = document.getElementById('result-container');
+    const resultListContainer = document.getElementById('result-list-container');
+    const sourceListElement = document.getElementById('source-list');
+    const messageBox = document.getElementById('message-box');
+    const historyCountElement = document.getElementById('history-count');
+    const typeButtons = document.querySelectorAll('.type-btn');
+    
+    // API Key Elements
+    const apiKeyContainer = document.getElementById('api-key-container');
+    const userApiKeyInput = document.getElementById('user-api-key');
+
+    // --- Type Selection Logic ---
+    window.selectType = function(type) {
+        currentType = type;
+        
+        // Update UI classes
+        typeButtons.forEach(btn => {
+            if (btn.innerText === type) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+
+        // Update Button Text
+        pickBtn.textContent = `Pick 5 ${type} for Me!`;
+
+        // Populate Genres
+        populateGenres(type);
+    }
+
+    function populateGenres(type) {
+        genreSelect.innerHTML = ''; // Clear existing
+        
+        // Add default/placeholder
+        const defaultOption = document.createElement('option');
+        defaultOption.text = `Select a ${type} Genre...`;
+        defaultOption.value = "";
+        defaultOption.disabled = true;
+        defaultOption.selected = true;
+        genreSelect.appendChild(defaultOption);
+
+        // Add Surprise Me Option
+        const surpriseOption = document.createElement('option');
+        surpriseOption.value = "Surprise Me";
+        surpriseOption.text = "🎲 Surprise Me! (Best of All Time)";
+        surpriseOption.style.fontWeight = "bold";
+        surpriseOption.style.color = "#4ade80"; // green-400
+        genreSelect.appendChild(surpriseOption);
+
+        const genres = genresByType[type] || [];
+        genres.forEach(genre => {
+            const option = document.createElement('option');
+            option.value = genre;
+            option.text = genre;
+            genreSelect.appendChild(option);
+        });
+    }
+
+    // --- Helper Functions ---
+
+    function getApiKey() {
+        const userKey = localStorage.getItem('gemini_user_api_key');
+        if (userKey) return userKey;
+        return defaultApiKey;
+    }
+
+    window.saveKeyAndRetry = function() {
+        const key = userApiKeyInput.value.trim();
+        if (key) {
+            localStorage.setItem('gemini_user_api_key', key);
+            apiKeyContainer.classList.add('hidden');
+            processSelection();
+        } else {
+            alert("Please enter a valid API key.");
+        }
+    }
+
+    function updateHistoryCount() {
+        historyCountElement.textContent = `${selectionHistory.length} titles remembered.`;
+    }
+
+    window.clearHistory = function() {
+        selectionHistory = [];
+        updateHistoryCount();
+        showMessage("History cleared.", false);
+        setTimeout(() => messageBox.classList.add('hidden'), 2000);
+    }
+
+    function showMessage(message, isError = true) {
+        messageBox.textContent = message;
+        messageBox.className = `mt-4 p-3 rounded-lg text-sm ${isError ? 'bg-red-900/80 text-red-100 border border-red-700' : 'bg-blue-900/80 text-blue-100 border border-blue-700'}`;
+        messageBox.classList.remove('hidden');
+    }
+
+    function setLoadingState(isLoading) {
+        pickBtn.disabled = isLoading;
+        genreSelect.disabled = isLoading;
+        loadingContainer.classList.toggle('hidden', !isLoading);
+        pickBtn.textContent = isLoading ? 'Searching...' : `Pick 5 ${currentType} for Me!`;
+    }
+
+    // --- Platform Icon Generator ---
+    function createPlatformBadge(platformName) {
+        const name = platformName.toLowerCase();
+        let bgClass = 'bg-gray-600';
+        let text = platformName;
+        
+        // Color mapping
+        if (name.includes('netflix')) { bgClass = 'bg-red-600'; text = 'N'; }
+        else if (name.includes('prime') || name.includes('amazon')) { bgClass = 'bg-blue-500'; text = 'Prime'; }
+        else if (name.includes('disney')) { bgClass = 'bg-blue-900'; text = 'Disney+'; }
+        else if (name.includes('hulu')) { bgClass = 'bg-green-500'; text = 'Hulu'; }
+        else if (name.includes('hbo') || name.includes('max')) { bgClass = 'bg-purple-600'; text = 'Max'; }
+        else if (name.includes('apple')) { bgClass = 'bg-gray-500'; text = 'AppleTV'; }
+        else if (name.includes('crunchyroll')) { bgClass = 'bg-orange-500'; text = 'CR'; }
+        else if (name.includes('youtube')) { bgClass = 'bg-red-500'; text = 'YT'; }
+
+        const span = document.createElement('span');
+        if (text.length <= 2) {
+             span.className = `${bgClass} text-white text-xs font-bold w-6 h-6 flex items-center justify-center rounded text-[10px]`;
+        } else {
+             span.className = `${bgClass} text-white text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider`;
+        }
+        span.textContent = text;
+        span.title = platformName; 
+        return span;
+    }
+
+    // --- Result Rendering ---
+
+    function renderResult(recommendations, sources) {
+        resultContainer.classList.remove('hidden');
+        resultListContainer.innerHTML = '';
+        sourceListElement.innerHTML = '';
+        
+        let newTitles = [];
+
+        recommendations.forEach((item, index) => {
+            const card = document.createElement('div');
+            card.className = 'p-4 bg-gray-800 rounded-lg border border-gray-700 hover:border-green-500 transition duration-150';
+
+            // Top Row
+            const topRow = document.createElement('div');
+            topRow.className = 'flex justify-between items-start mb-2';
+
+            // Left: Title
+            const titleDiv = document.createElement('div');
+            titleDiv.className = 'flex-1 pr-2';
+            const title = document.createElement('h3');
+            title.className = 'text-xl font-bold text-green-300 leading-tight';
+            title.textContent = `${index + 1}. ${item.title || 'Unknown Title'}`;
+            titleDiv.appendChild(title);
+
+            // Right: Icons + Rating
+            const rightSide = document.createElement('div');
+            rightSide.className = 'flex items-center';
+
+            // OTT Icons
+            if (item.platforms && Array.isArray(item.platforms) && item.platforms.length > 0) {
+                const ottContainer = document.createElement('div');
+                ottContainer.className = 'flex items-center space-x-1 mr-3 flex-wrap justify-end gap-y-1';
+                item.platforms.slice(0, 3).forEach(p => {
+                    ottContainer.appendChild(createPlatformBadge(p));
+                });
+                rightSide.appendChild(ottContainer);
+            }
+
+            // Rating Group
+            const ratingGroup = document.createElement('div');
+            ratingGroup.className = 'flex flex-col items-end min-w-[50px]';
+
+            const imdbLabel = document.createElement('span');
+            imdbLabel.className = 'text-[10px] text-yellow-500 font-bold uppercase tracking-widest mb-0.5';
+            imdbLabel.textContent = 'IMDb';
+
+            const rating = document.createElement('span');
+            rating.className = 'text-sm font-semibold px-2 py-1 bg-yellow-600 text-gray-900 rounded-md w-full text-center';
+            rating.textContent = (item.imdbRating || 'N/A').replace(/\/10/g, '').trim(); 
+            
+            ratingGroup.appendChild(imdbLabel);
+            ratingGroup.appendChild(rating);
+            rightSide.appendChild(ratingGroup);
+
+            topRow.appendChild(titleDiv);
+            topRow.appendChild(rightSide);
+
+            const suggestion = document.createElement('p');
+            suggestion.className = 'text-gray-400 text-sm mt-1';
+            suggestion.textContent = item.suggestion || 'No description provided.';
+            
+            card.appendChild(topRow);
+            card.appendChild(suggestion);
+            resultListContainer.appendChild(card);
+            
+            if (item.title) newTitles.push(item.title);
+        });
+        
+        selectionHistory.push(...newTitles);
+        updateHistoryCount();
+        
+        // Sources
+        if (sources && sources.length > 0) {
+            const uniqueSources = Array.from(new Map(sources.map(item => [item['uri'], item])).values());
+            const sourceHeader = document.createElement('div');
+            sourceHeader.textContent = 'Sources:';
+            sourceListElement.appendChild(sourceHeader);
+
+            uniqueSources.slice(0, 3).forEach((source, index) => {
+                if (source.uri && source.title) {
+                    const link = document.createElement('a');
+                    link.href = source.uri;
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                    link.className = 'text-blue-400 hover:underline block truncate';
+                    link.textContent = `${index + 1}. ${source.title}`;
+                    sourceListElement.appendChild(link);
+                }
+            });
+        }
+    }
+
+    // --- Main Logic ---
+
+    window.processSelection = async function() {
+        messageBox.classList.add('hidden');
+        resultContainer.classList.add('hidden');
+        apiKeyContainer.classList.add('hidden');
+
+        // Logic Change: If value is empty OR "Surprise Me", treat as Surprise.
+        let genre = genreSelect.value;
+        let isSurprise = false;
+
+        if (!genre || genre === "Surprise Me") {
+            isSurprise = true;
+        }
+
+        setLoadingState(true);
+
+        const currentKey = getApiKey();
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${currentKey}`;
+        
+        const exclusionList = selectionHistory.length > 0 ? ` (EXCLUDE: ${selectionHistory.join(', ')})` : '';
+        
+        // Prompt Engineering
+        const systemPrompt = "You are an expert entertainment curator. Return a raw JSON array of 5 top-rated recommendations based on the user's request. The JSON must follow this schema: [{ \"title\": \"string\", \"imdbRating\": \"string\", \"suggestion\": \"string\", \"platforms\": [\"string\"] }]. 'platforms' should be a list of major streaming services (e.g., Netflix, Crunchyroll, Disney+, HBO, YouTube). Do not include markdown formatting like ```json. just raw json.";
+        
+        let userQuery = "";
+        
+        if (isSurprise) {
+             userQuery = `Suggest 5 universally top-rated, critically acclaimed ${currentType} from various genres. Do not limit to a single genre.${exclusionList} Include IMDb ratings and available streaming platforms.`;
+        } else {
+             userQuery = `Suggest 5 top-rated ${currentType} for genre '${genre}'.${exclusionList} Include IMDb ratings and available streaming platforms.`;
+        }
+
+        const payload = {
+            contents: [{ parts: [{ text: userQuery }] }],
+            tools: [{ "google_search": {} }],
+            systemInstruction: { parts: [{ text: systemPrompt }] }
+        };
+
+        try {
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                if (response.status === 401 || response.status === 403) {
+                    setLoadingState(false);
+                    apiKeyContainer.classList.remove('hidden');
+                    showMessage("Access Denied (401). Please enter a valid API Key above.", true);
+                    return;
+                }
+                throw new Error(`HTTP Error: ${response.status}`);
+            }
+
+            const result = await response.json();
+            const candidate = result.candidates?.[0];
+
+            if (candidate && candidate.content?.parts?.[0]?.text) {
+                try {
+                    let rawText = candidate.content.parts[0].text;
+                    // Robust cleaning
+                    rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+                    const recommendations = JSON.parse(rawText);
+                    
+                    let sources = [];
+                    if (candidate.groundingMetadata?.groundingAttributions) {
+                        sources = candidate.groundingMetadata.groundingAttributions
+                            .map(a => ({ uri: a.web?.uri, title: a.web?.title }))
+                            .filter(s => s.uri && s.title);
+                    }
+                    
+                    renderResult(recommendations, sources);
+                } catch (e) {
+                    console.error("JSON Parse Error:", e, candidate.content.parts[0].text);
+                    showMessage("Error parsing result data. Please try again.");
+                }
+            } else {
+                showMessage("No results found. Try a broader genre.");
+            }
+
+        } catch (error) {
+            console.error(error);
+            showMessage(`Error: ${error.message}`);
+        } finally {
+            setLoadingState(false);
+        }
+    }
+
+    // Initialize with default type
+    document.addEventListener('DOMContentLoaded', () => {
+        updateHistoryCount();
+        const savedKey = localStorage.getItem('gemini_user_api_key');
+        if (savedKey) userApiKeyInput.value = savedKey;
+        
+        // Initial population
+        populateGenres(currentType);
+    });
+
+</script>
+</body>
+</html>
