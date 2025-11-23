@@ -1,4 +1,4 @@
-# 🍿 Gemini Entertainment Picker
+# 🍿 Entertainment Picker
 
 An AI-powered entertainment recommendation app that suggests movies, TV series, anime, and web shows based on your preferences using Google's Gemini AI.
 
